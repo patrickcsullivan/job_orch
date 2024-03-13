@@ -47,8 +47,9 @@ pub trait Runner {
         req: <Self::S as RequestSender>::Request,
     ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>>;
 
-    /// Returns a new [Runner] which converts the response from this [Runner]
-    /// into the request for a [second] runner.
+    /// Returns a new runner which executes this runner, converts the response
+    /// from this runner into a request for the [second] runner, and then
+    /// executes the [second] runner.
     fn then<Second, F>(self, f: F, second: Second) -> RunnerThen<Self, Second, F>
     where
         Self: Sized,
