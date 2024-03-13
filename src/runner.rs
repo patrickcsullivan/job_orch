@@ -106,7 +106,7 @@ where
 #[async_trait]
 impl<J, JId, S, R, E> Runner for RunnerSingle<J, JId, S, R, E>
 where
-    J: Run + Sync + 'static,
+    J: Run + Send + Sync + 'static,
     J::Request: Send,
     J::Response: Send,
     J::Error: Send,
@@ -119,6 +119,7 @@ where
     E: From<<S as MpSender>::SenderError>
         + From<<R as McReceiver>::ReceiverError>
         + From<J::Error>
+        + Send
         + Sync,
 {
     type J = J;
@@ -169,28 +170,28 @@ where
         <<First as Runner>::R as ResponseReceiver>::Response,
     ) -> <<Then as Runner>::S as RequestSender>::Request,
 {
-    first: First,
-    then: Then,
-    f: F,
+    pub(crate) first: First,
+    pub(crate) then: Then,
+    pub(crate) f: F,
 }
 
 #[async_trait]
-impl<First, Second> Runner for RunnerThen<First, Second>
+impl<First, Second, F> Runner for RunnerThen<First, Second, F>
 where
-    First: Runner + Sync,
-    <First::S as RequestSender>::Request: Clone + Send,
+    First: Runner + Send + Sync,
+    <First::S as RequestSender>::Request: Clone + Send + Sync,
+    <First::R as ResponseReceiver>::Response: Send,
     First::E: From<<Second::S as MpSender>::SenderError>
         + From<<Second::R as McReceiver>::ReceiverError>
         + From<<Second::R as ResponseReceiver>::JobError>,
-    Second: Runner<E = First::E> + Sync,
-    <<Second as Runner>::S as RequestSender>::Request: From<(
-        <<First as Runner>::S as RequestSender>::Request,
-        <<First as Runner>::R as ResponseReceiver>::Response,
-    )>, // F: Fn(
-        //         <<First as Runner>::S as RequestSender>::Request,
-        //         <<First as Runner>::R as ResponseReceiver>::Response,
-        //     ) -> <<Second as Runner>::S as RequestSender>::Request
-        //     + Sync,
+    Second: Runner<E = First::E> + Send + Sync,
+    <Second::S as RequestSender>::Request: Send,
+    F: Fn(
+            <<First as Runner>::S as RequestSender>::Request,
+            <<First as Runner>::R as ResponseReceiver>::Response,
+        ) -> <<Second as Runner>::S as RequestSender>::Request
+        + Send
+        + Sync,
 {
     type J = (First::J, Second::J);
     type S = First::S;
