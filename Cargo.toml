@@ -1,7 +1,8 @@
 [package]
-name = "static_dag"
+name = "job_orch"
 version = "0.1.0"
 edition = "2021"
+description = "Library for orchestrating event-driven jobs."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

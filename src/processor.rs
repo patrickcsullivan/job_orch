@@ -33,17 +33,6 @@ pub trait RequestSender: MpSender<Message = (Self::JobId, Self::Request)> {
     }
 }
 
-// /// The sending side of a multiple-producer channel for a job processor.
-// pub trait RequestSender: Clone {
-//     type Request;
-
-//     /// An error that may occor when sending a job request to the processor.
-//     type SenderError;
-
-//     /// Sends a request to perform a job to the processor.
-//     fn send(&self, request: Self::Request) -> Result<(), Self::SenderError>;
-// }
-
 /// The receiving side of a multiple-consumer channel for a job processor.
 #[async_trait]
 pub trait ResponseReceiver:

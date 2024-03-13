@@ -1,10 +1,18 @@
 use crate::processor::{McReceiver, MpSender, RequestSender, ResponseReceiver};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
+use tokio::{
+    task::{self, JoinError},
+    time,
+};
 
 /// Returns a job runner that will pass a request to the given [request_sender]
 /// and will wait on a corresponding response from the given
 /// [response_receiver].
-pub fn runner<S, R, JId, E>(request_sender: S, response_receiver: R) -> RunnerSingle<S, R, JId, E>
+pub fn runner<S, R, JId, E>(
+    request_sender: S,
+    response_receiver: R,
+    timeout: Duration,
+) -> RunnerSingle<S, R, JId, E>
 where
     S: RequestSender<JobId = JId>,
     R: ResponseReceiver<JobId = JId>,
@@ -16,6 +24,7 @@ where
     RunnerSingle {
         request_sender,
         response_receiver,
+        timeout,
         _jid: PhantomData,
         _e: PhantomData,
     }
@@ -32,6 +41,7 @@ pub trait Runner {
         + From<<Self::R as ResponseReceiver>::JobError>;
 
     /// Runs the sequence of jobs.
+    #[allow(async_fn_in_trait)]
     async fn run(
         &self,
         req: <Self::S as RequestSender>::Request,
@@ -77,6 +87,10 @@ where
     /// responses are received.
     response_receiver: R,
 
+    /// Maximum amount of time to wait for a completed job before assuming the
+    /// job has failed or been lost.
+    timeout: Duration,
+
     _jid: PhantomData<JId>,
 
     _e: PhantomData<E>,
@@ -85,8 +99,10 @@ where
 impl<S, R, JId, E> Runner for RunnerSingle<S, R, JId, E>
 where
     S: RequestSender<JobId = JId>,
-    R: ResponseReceiver<JobId = JId>,
-    JId: Copy + Eq + for<'a> From<&'a <S as RequestSender>::Request>,
+    R: ResponseReceiver<JobId = JId> + Send + Sync + 'static,
+    R::Response: Send + Sync + 'static,
+    R::JobError: Send + Sync + 'static,
+    JId: Copy + Eq + Send + for<'a> From<&'a <S as RequestSender>::Request> + 'static,
     E: From<<S as MpSender>::SenderError>
         + From<<R as McReceiver>::ReceiverError>
         + From<<R as ResponseReceiver>::JobError>,
@@ -100,17 +116,28 @@ where
         req: <Self::S as RequestSender>::Request,
     ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>> {
         let req_job_id: JId = (&req).into();
+        let receiver = self.response_receiver.clone();
+
+        // Start listenting for responses before the request is actually sent so
+        // a response can't get sent before we start listening.
+        let poller = task::spawn(async move {
+            loop {
+                match receiver.receive().await {
+                    Ok((resp_job_id, resp_rslt)) if req_job_id == resp_job_id => return resp_rslt,
+                    _ => {}
+                }
+            }
+        });
+
         self.request_sender
             .send_request(req_job_id, req)
             .map_err(|e| RunnerError::E(e.into()))?;
 
-        while let Result::Ok((resp_job_id, resp_rslt)) = self.response_receiver.receive().await {
-            if req_job_id == resp_job_id {
-                return resp_rslt.map_err(|e| RunnerError::E(e.into()));
-            }
+        match time::timeout(self.timeout, poller).await {
+            Ok(Ok(x)) => x.map_err(|e| RunnerError::E(e.into())),
+            Ok(Err(e)) => Err(RunnerError::Join(e)),
+            Err(_) => Err(RunnerError::Timeout),
         }
-
-        todo!()
     }
 }
 
@@ -163,4 +190,5 @@ where
 pub enum RunnerError<E> {
     E(E),
     Timeout,
+    Join(JoinError),
 }

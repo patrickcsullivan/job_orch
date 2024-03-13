@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-/// A job that can be ran asynchronously.
+/// A job that can run asynchronously.
 #[async_trait]
 pub trait Run {
     /// The type of input request to the job.
@@ -16,7 +16,7 @@ pub trait Run {
     /// The type of error that can occur when executing the work of the job.
     type Error;
 
-    /// Executes the job.
+    /// Runs the job.
     async fn run(
         &self,
         req: &Self::Request,

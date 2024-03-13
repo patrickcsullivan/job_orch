@@ -92,6 +92,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd5256b483761cd23699d0da46cc6fd2ee3be420bbe6d020ae4a091e70b7e9fd"
 
 [[package]]
+name = "job_orch"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "either",
+ "tokio",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.153"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -243,15 +252,6 @@ checksum = "7b5fac59a5cb5dd637972e5fca70daf0523c9067fcdc4842f053dae04a18f8e9"
 dependencies = [
  "libc",
  "windows-sys",
-]
-
-[[package]]
-name = "static_dag"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "either",
- "tokio",
 ]
 
 [[package]]
