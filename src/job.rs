@@ -18,8 +18,31 @@ pub trait Run {
 
     /// Runs the job.
     async fn run(
-        &self,
         req: &Self::Request,
         rsrcs: &mut Self::Resources,
     ) -> Result<Self::Response, Self::Error>;
+}
+
+#[async_trait]
+impl<J1, J2> Run for (J1, J2)
+where
+    J1: Run,
+    J2: Run,
+{
+    type Request = J1::Request;
+    type Response = J2::Response;
+    type Resources = (J1::Resources, J2::Resources);
+    type Error = (Option<J1::Error>, Option<J2::Error>);
+
+    async fn run(
+        _req: &Self::Request,
+        _rsrcs: &mut Self::Resources,
+    ) -> Result<Self::Response, Self::Error> {
+        // The implementation of this trait is not useful in itself. However, it
+        // is useful to be able to indicate at a type level that (J1, J2)
+        // implements Run when both J1 and J2 implement Run so that we can
+        // construct unique types with which to tag implementations of Runner by
+        // RunnerThen.
+        Err((None, None))
+    }
 }
