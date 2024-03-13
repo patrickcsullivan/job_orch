@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 /// A job that can be ran asynchronously.
 #[async_trait]
-pub trait Job {
+pub trait Run {
     /// The type of input request to the job.
     type Request;
 

@@ -1,31 +1,64 @@
-use crate::task::Job;
+use crate::task::Run;
 use async_trait::async_trait;
 
-/// The sending side of a multiple-producer channel for a job processor.
+/// The sending side of a multiple-producer channel.
+pub trait MpSender: Clone {
+    type Message;
+    type SenderError;
+
+    fn send(&self, msg: Self::Message) -> Result<(), Self::SenderError>;
+}
+
+/// The receiving side of a multiple-consumer channel.
 #[async_trait]
-pub trait RequestSender<J>: Clone
-where
-    J: Job,
-{
-    /// An error that may occor when sending a job request to the processor.
-    type Error;
+pub trait McReceiver: Clone {
+    type Message;
+    type ReceiverError;
+
+    async fn receive(&self) -> Result<Self::Message, Self::ReceiverError>;
+}
+
+/// The sending side of a multiple-producer channel for a job processor.
+pub trait RequestSender: MpSender<Message = (Self::JobId, Self::Request)> {
+    type JobId;
+    type Request;
 
     /// Sends a request to perform a job to the processor.
-    fn send(&self, request: J::Request) -> Result<(), Self::Error>;
+    fn send_request(
+        &self,
+        job_id: Self::JobId,
+        request: Self::Request,
+    ) -> Result<(), Self::SenderError> {
+        self.send((job_id, request))
+    }
 }
+
+// /// The sending side of a multiple-producer channel for a job processor.
+// pub trait RequestSender: Clone {
+//     type Request;
+
+//     /// An error that may occor when sending a job request to the processor.
+//     type SenderError;
+
+//     /// Sends a request to perform a job to the processor.
+//     fn send(&self, request: Self::Request) -> Result<(), Self::SenderError>;
+// }
 
 /// The receiving side of a multiple-consumer channel for a job processor.
 #[async_trait]
-pub trait ResponseReceiver<J>: Clone
-where
-    J: Job,
+pub trait ResponseReceiver:
+    McReceiver<Message = (Self::JobId, Result<Self::Response, Self::JobError>)>
 {
-    /// An error that may occor when awaiting to receive a job response from the
-    /// processor.
-    type Error;
+    type JobId;
+    type Response;
+    type JobError;
 
     /// Wait to receive a job response from the processor.
-    async fn receive(&self) -> Result<Result<J::Response, J::Error>, Self::Error>;
+    async fn receive_response(
+        &self,
+    ) -> Result<(Self::JobId, Result<Self::Response, Self::JobError>), Self::ReceiverError> {
+        self.receive().await
+    }
 }
 
 /// A processor that receives asynchronous job requests, executes the jobs, and
@@ -33,16 +66,19 @@ where
 #[async_trait]
 pub trait Processor<J>
 where
-    J: Job,
+    J: Run,
 {
     /// An error that may occur when running the processor.
-    type Error;
+    ///
+    /// This does not include job-specific errors and only pertains to
+    /// processor-specific errors that may occur while attempting to run a job.
+    type ProcessorError;
 
     /// The sending side of a channel into which job requests are sent.
-    type Sender: RequestSender<J>;
+    type Sender: RequestSender<Request = J::Request>;
 
     /// The receiving side of a channel into which job responses are sent.
-    type Receiver: ResponseReceiver<J>;
+    type Receiver: ResponseReceiver<Response = J::Response, JobError = J::Error>;
 
     /// Returns a sender for sending job requests to the processor.
     fn request_sender(&self) -> Self::Sender;
@@ -51,26 +87,5 @@ where
     fn response_receiver(&self) -> Self::Receiver;
 
     /// Processes job requests sent to the processor and emit job responses.
-    async fn run(&self) -> Result<(), Self::Error>;
+    async fn run(&self) -> Result<(), Self::ProcessorError>;
 }
-
-pub struct JobAndProcessor<J, P>
-where
-    J: Job,
-    P: Processor<J>,
-{
-    job: J,
-    processor: P,
-}
-
-// impl<J> Sender<J> for async_channel::Sender<(J::Preprocessed, J)>
-// where
-//     J: Job,
-// {
-//     type Error = ();
-
-//     fn send(&self, pre: J::Preprocessed, job: J) -> Result<(), Self::Error> {
-//         self.send((pre, job));
-//         Ok(())
-//     }
-// }
