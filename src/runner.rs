@@ -4,10 +4,11 @@ use std::marker::PhantomData;
 /// Returns a job runner that will pass a request to the given [request_sender]
 /// and will wait on a corresponding response from the given
 /// [response_receiver].
-pub fn runner<S, R, E>(request_sender: S, response_receiver: R) -> RunnerSingle<S, R, E>
+pub fn runner<S, R, JId, E>(request_sender: S, response_receiver: R) -> RunnerSingle<S, R, JId, E>
 where
-    S: RequestSender<JobId = u64>,
-    R: ResponseReceiver<JobId = u64>,
+    S: RequestSender<JobId = JId>,
+    R: ResponseReceiver<JobId = JId>,
+    JId: Copy + Eq + for<'a> From<&'a <S as RequestSender>::Request>,
     E: From<<S as MpSender>::SenderError>
         + From<<R as McReceiver>::ReceiverError>
         + From<<R as ResponseReceiver>::JobError>,
@@ -15,6 +16,7 @@ where
     RunnerSingle {
         request_sender,
         response_receiver,
+        _jid: PhantomData,
         _e: PhantomData,
     }
 }
@@ -23,8 +25,8 @@ where
 /// input requests are passed to multiple-producer input channels and whose
 /// responses are published to multiple-consumer output channels.ß
 pub trait Runner {
-    type S: RequestSender<JobId = u64>;
-    type R: ResponseReceiver<JobId = u64>;
+    type S: RequestSender;
+    type R: ResponseReceiver;
     type E: From<<Self::S as MpSender>::SenderError>
         + From<<Self::R as McReceiver>::ReceiverError>
         + From<<Self::R as ResponseReceiver>::JobError>;
@@ -58,10 +60,11 @@ pub trait Runner {
 ///
 /// The runner will pass a given request to the [request_sender] and will wait
 /// for a corresponding response from the [response_receiver].
-pub struct RunnerSingle<S, R, E>
+pub struct RunnerSingle<S, R, JId, E>
 where
-    S: RequestSender<JobId = u64>,
-    R: ResponseReceiver<JobId = u64>,
+    S: RequestSender<JobId = JId>,
+    R: ResponseReceiver<JobId = JId>,
+    JId: Copy + Eq + for<'a> From<&'a <S as RequestSender>::Request>,
     E: From<<S as MpSender>::SenderError>
         + From<<R as McReceiver>::ReceiverError>
         + From<<R as ResponseReceiver>::JobError>,
@@ -74,13 +77,16 @@ where
     /// responses are received.
     response_receiver: R,
 
+    _jid: PhantomData<JId>,
+
     _e: PhantomData<E>,
 }
 
-impl<S, R, E> Runner for RunnerSingle<S, R, E>
+impl<S, R, JId, E> Runner for RunnerSingle<S, R, JId, E>
 where
-    S: RequestSender<JobId = u64>,
-    R: ResponseReceiver<JobId = u64>,
+    S: RequestSender<JobId = JId>,
+    R: ResponseReceiver<JobId = JId>,
+    JId: Copy + Eq + for<'a> From<&'a <S as RequestSender>::Request>,
     E: From<<S as MpSender>::SenderError>
         + From<<R as McReceiver>::ReceiverError>
         + From<<R as ResponseReceiver>::JobError>,
@@ -93,7 +99,7 @@ where
         &self,
         req: <Self::S as RequestSender>::Request,
     ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>> {
-        let req_job_id = 0; // todo
+        let req_job_id: JId = (&req).into();
         self.request_sender
             .send_request(req_job_id, req)
             .map_err(|e| RunnerError::E(e.into()))?;
