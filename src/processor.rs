@@ -1,4 +1,4 @@
-use crate::task::Run;
+use crate::job::Run;
 use async_trait::async_trait;
 
 /// The sending side of a multiple-producer channel.

@@ -1,6 +1,5 @@
-use std::marker::PhantomData;
-
 use crate::processor::{McReceiver, MpSender, RequestSender, ResponseReceiver};
+use std::marker::PhantomData;
 
 /// Returns a job runner that will pass a request to the given [request_sender]
 /// and will wait on a corresponding response from the given
