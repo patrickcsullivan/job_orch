@@ -2,11 +2,12 @@ use crate::job::Run;
 use async_trait::async_trait;
 
 /// The sending side of a multiple-producer channel.
+#[async_trait]
 pub trait MpSender: Clone {
     type Message;
     type SenderError;
 
-    fn send(&self, msg: Self::Message) -> Result<(), Self::SenderError>;
+    async fn send(&self, msg: Self::Message) -> Result<(), Self::SenderError>;
 }
 
 /// The receiving side of a multiple-consumer channel.
@@ -19,17 +20,18 @@ pub trait McReceiver: Clone {
 }
 
 /// The sending side of a multiple-producer channel for a job processor.
+#[async_trait]
 pub trait RequestSender: MpSender<Message = (Self::JobId, Self::Request)> {
-    type JobId;
-    type Request;
+    type JobId: Send;
+    type Request: Send;
 
     /// Sends a request to perform a job to the processor.
-    fn send_request(
+    async fn send_request(
         &self,
         job_id: Self::JobId,
         request: Self::Request,
     ) -> Result<(), Self::SenderError> {
-        self.send((job_id, request))
+        self.send((job_id, request)).await
     }
 }
 
@@ -76,5 +78,5 @@ where
     fn response_receiver(&self) -> Self::Receiver;
 
     /// Processes job requests sent to the processor and emit job responses.
-    async fn run(&self) -> Result<(), Self::ProcessorError>;
+    async fn run(&self, rsrcs: &mut J::Resources) -> Result<(), Self::ProcessorError>;
 }

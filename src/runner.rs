@@ -55,7 +55,7 @@ pub trait Runner {
     /// Returns a new runner which executes this runner, converts the response
     /// from this runner into a request for the [second] runner, and then
     /// executes the [second] runner.
-    fn then<Second, F>(self, f: F, second: Second) -> RunnerThen<Self, Second, F>
+    fn then<Second, F>(self, second: Second, f: F) -> RunnerThen<Self, Second, F>
     where
         Self: Sized,
         Second: Runner,
@@ -147,6 +147,7 @@ where
 
         self.request_sender
             .send_request(req_job_id, req)
+            .await
             .map_err(|e| RunnerError::E(e.into()))?;
 
         match time::timeout(self.timeout, poller).await {
