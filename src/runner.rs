@@ -2,6 +2,7 @@ use crate::{
     job::Run,
     processor::{McReceiver, MpSender, RequestSender, ResponseReceiver},
 };
+use async_trait::async_trait;
 use std::{marker::PhantomData, time::Duration};
 use tokio::{
     task::{self, JoinError},
@@ -15,7 +16,7 @@ pub fn runner<J, JId, S, R, E>(
     request_sender: S,
     response_receiver: R,
     timeout: Duration,
-) -> Runner<J, JId, S, R, E>
+) -> RunnerSingle<J, JId, S, R, E>
 where
     J: Run,
     S: RequestSender<JobId = JId, Request = J::Request>,
@@ -23,7 +24,7 @@ where
     JId: Copy + Eq + for<'a> From<&'a J::Request>,
     E: From<<S as MpSender>::SenderError> + From<<R as McReceiver>::ReceiverError> + From<J::Error>,
 {
-    Runner {
+    RunnerSingle {
         request_sender,
         response_receiver,
         timeout,
@@ -33,11 +34,30 @@ where
     }
 }
 
+/// Runs a sequence of asynchronous jobs that depend on one another and whose
+/// input requests are passed to multiple-producer input channels and whose
+/// responses are published to multiple-consumer output channels.
+#[async_trait]
+pub trait Runner {
+    type J: Run;
+    type S: RequestSender<Request = <Self::J as Run>::Request>;
+    type R: ResponseReceiver<Response = <Self::J as Run>::Response>;
+    type E: From<<Self::S as MpSender>::SenderError>
+        + From<<Self::R as McReceiver>::ReceiverError>
+        + From<<Self::R as ResponseReceiver>::JobError>;
+
+    /// Runs the sequence of jobs.
+    async fn run(
+        &self,
+        req: <Self::J as Run>::Request,
+    ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>>;
+}
+
 /// A runner for a single job.
 ///
 /// The runner will pass a given request to the [request_sender] and will wait
 /// for a corresponding response from the [response_receiver].
-pub struct Runner<J, JId, S, R, E>
+pub struct RunnerSingle<J, JId, S, R, E>
 where
     J: Run,
     S: RequestSender<JobId = JId, Request = J::Request>,
@@ -64,7 +84,8 @@ where
     _e: PhantomData<E>,
 }
 
-impl<J, JId, S, R, E> Runner<J, JId, S, R, E>
+#[async_trait]
+impl<J, JId, S, R, E> Runner for RunnerSingle<J, JId, S, R, E>
 where
     J: Run + Send + Sync + 'static,
     J::Request: Send,
@@ -82,10 +103,15 @@ where
         + Send
         + Sync,
 {
-    pub async fn run(
+    type J = J;
+    type S = S;
+    type R = R;
+    type E = E;
+
+    async fn run(
         &self,
-        req: <J as Run>::Request,
-    ) -> Result<<R as ResponseReceiver>::Response, RunnerError<E>> {
+        req: <Self::J as Run>::Request,
+    ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>> {
         let req_job_id: JId = (&req).into();
         let receiver = self.response_receiver.clone();
 
