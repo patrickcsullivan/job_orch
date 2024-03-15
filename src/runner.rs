@@ -12,17 +12,18 @@ use tokio::{
 /// Returns a job runner that will pass a request to the given [request_sender]
 /// and will wait on a corresponding response from the given
 /// [response_receiver].
-pub fn runner<J, JId, S, R, E>(
+pub fn runner<JId, S, R, E>(
     request_sender: S,
     response_receiver: R,
     timeout: Duration,
 ) -> RunnerSingle<JId, S, R, E>
 where
-    J: Run,
-    S: RequestSender<JobId = JId, Request = J::Request>,
-    R: ResponseReceiver<JobId = JId, Response = J::Response, JobError = J::Error>,
-    JId: Copy + Eq + for<'a> From<&'a J::Request>,
-    E: From<<S as MpSender>::SenderError> + From<<R as McReceiver>::ReceiverError> + From<J::Error>,
+    S: RequestSender<JobId = JId>,
+    R: ResponseReceiver<JobId = JId>,
+    JId: Copy + Eq + for<'a> From<&'a S::Request>,
+    E: From<<S as MpSender>::SenderError>
+        + From<<R as McReceiver>::ReceiverError>
+        + From<<R as ResponseReceiver>::JobError>,
 {
     RunnerSingle {
         request_sender,
