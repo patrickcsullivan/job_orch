@@ -16,7 +16,7 @@ pub fn runner<J, JId, S, R, E>(
     request_sender: S,
     response_receiver: R,
     timeout: Duration,
-) -> RunnerSingle<J, JId, S, R, E>
+) -> RunnerSingle<JId, S, R, E>
 where
     J: Run,
     S: RequestSender<JobId = JId, Request = J::Request>,
@@ -28,7 +28,6 @@ where
         request_sender,
         response_receiver,
         timeout,
-        _j: PhantomData,
         _jid: PhantomData,
         _e: PhantomData,
     }
@@ -39,9 +38,8 @@ where
 /// responses are published to multiple-consumer output channels.
 #[async_trait]
 pub trait Runner {
-    type J: Run;
-    type S: RequestSender<Request = <Self::J as Run>::Request>;
-    type R: ResponseReceiver<Response = <Self::J as Run>::Response>;
+    type S: RequestSender;
+    type R: ResponseReceiver;
     type E: From<<Self::S as MpSender>::SenderError>
         + From<<Self::R as McReceiver>::ReceiverError>
         + From<<Self::R as ResponseReceiver>::JobError>;
@@ -49,7 +47,7 @@ pub trait Runner {
     /// Runs the sequence of jobs.
     async fn run(
         &self,
-        req: <Self::J as Run>::Request,
+        req: <Self::S as RequestSender>::Request,
     ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>>;
 }
 
@@ -57,13 +55,14 @@ pub trait Runner {
 ///
 /// The runner will pass a given request to the [request_sender] and will wait
 /// for a corresponding response from the [response_receiver].
-pub struct RunnerSingle<J, JId, S, R, E>
+pub struct RunnerSingle<JId, S, R, E>
 where
-    J: Run,
-    S: RequestSender<JobId = JId, Request = J::Request>,
-    R: ResponseReceiver<JobId = JId, Response = J::Response, JobError = J::Error>,
-    JId: Copy + Eq + for<'a> From<&'a J::Request>,
-    E: From<<S as MpSender>::SenderError> + From<<R as McReceiver>::ReceiverError> + From<J::Error>,
+    S: RequestSender<JobId = JId>,
+    R: ResponseReceiver<JobId = JId>,
+    JId: Copy + Eq + for<'a> From<&'a S::Request>,
+    E: From<<S as MpSender>::SenderError>
+        + From<<R as McReceiver>::ReceiverError>
+        + From<<R as ResponseReceiver>::JobError>,
 {
     /// The sending side of a channel to a job processor to which requests are
     /// sent.
@@ -77,40 +76,32 @@ where
     /// job has failed or been lost.
     timeout: Duration,
 
-    _j: PhantomData<J>,
-
     _jid: PhantomData<JId>,
 
     _e: PhantomData<E>,
 }
 
 #[async_trait]
-impl<J, JId, S, R, E> Runner for RunnerSingle<J, JId, S, R, E>
+impl<JId, S, R, E> Runner for RunnerSingle<JId, S, R, E>
 where
-    J: Run + Send + Sync + 'static,
-    J::Request: Send,
-    J::Response: Send,
-    J::Error: Send,
-    S: RequestSender<JobId = JId, Request = J::Request> + Send + Sync,
-    R: ResponseReceiver<JobId = JId, Response = J::Response, JobError = J::Error>
-        + Send
-        + Sync
-        + 'static,
-    JId: Copy + Eq + Send + Sync + 'static + for<'a> From<&'a J::Request>,
+    S: RequestSender<JobId = JId> + Send + Sync,
+    R: ResponseReceiver<JobId = JId> + Send + Sync + 'static,
+    <R as ResponseReceiver>::Response: Send,
+    <R as ResponseReceiver>::JobError: Send,
+    JId: Copy + Eq + Send + Sync + 'static + for<'a> From<&'a <S as RequestSender>::Request>,
     E: From<<S as MpSender>::SenderError>
         + From<<R as McReceiver>::ReceiverError>
-        + From<J::Error>
+        + From<<R as ResponseReceiver>::JobError>
         + Send
         + Sync,
 {
-    type J = J;
     type S = S;
     type R = R;
     type E = E;
 
     async fn run(
         &self,
-        req: <Self::J as Run>::Request,
+        req: <Self::S as RequestSender>::Request,
     ) -> Result<<Self::R as ResponseReceiver>::Response, RunnerError<Self::E>> {
         let req_job_id: JId = (&req).into();
         let receiver = self.response_receiver.clone();
