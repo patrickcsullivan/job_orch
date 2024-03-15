@@ -22,6 +22,8 @@ pub trait GetCache {
     ) -> Result<Option<Self::Response>, Self::Error>;
 }
 
+// todo: GetCacheWithContext
+
 #[async_trait]
 impl<J, JId, S, R, E> GetCache for RunnerSingle<J, JId, S, R, E>
 where
@@ -62,74 +64,69 @@ where
     }
 }
 
-#[async_trait]
-impl<First, Second, F> GetCache for RunnerThen<First, Second, F>
-where
-    First: Runner
-        + GetCache<
-            Request = <<First as Runner>::S as RequestSender>::Request,
-            Response = <<First as Runner>::R as ResponseReceiver>::Response,
-            Resources = <<First as Runner>::J as Run>::Resources,
-        > + Send
-        + Sync,
-    <<First as Runner>::S as RequestSender>::Request: Sync,
-    <<First as Runner>::R as ResponseReceiver>::Response: Send,
-    <<First as Runner>::J as Run>::Resources: Send,
-    <First as GetCache>::Error: Send,
-    <First::S as RequestSender>::Request: Clone + Send,
-    First::E: From<<Second::S as MpSender>::SenderError>
-        + From<<Second::R as McReceiver>::ReceiverError>
-        + From<<Second::R as ResponseReceiver>::JobError>,
-    Second: Runner<E = First::E>
-        + GetCache<
-            Request = <<Second as Runner>::S as RequestSender>::Request,
-            Response = <<Second as Runner>::R as ResponseReceiver>::Response,
-            Resources = <<Second as Runner>::J as Run>::Resources,
-        > + Send
-        + Sync,
-    <<Second as Runner>::S as RequestSender>::Request: Send + Sync,
-    <<Second as Runner>::R as ResponseReceiver>::Response: Send,
-    <<Second as Runner>::J as Run>::Resources: Send,
-    <Second as GetCache>::Error: Send,
-    F: Fn(
-            <<First as Runner>::S as RequestSender>::Request,
-            <<First as Runner>::R as ResponseReceiver>::Response,
-        ) -> <<Second as Runner>::S as RequestSender>::Request
-        + Send
-        + Sync,
-{
-    type Request = <<First as Runner>::S as RequestSender>::Request;
+// #[async_trait]
+// impl<First, Second, F> GetCache for RunnerThen<First, Second, F>
+// where
+//     First: Runner
+//         + GetCache<
+//             Request = <<First as Runner>::S as RequestSender>::Request,
+//             Response = <<First as Runner>::R as ResponseReceiver>::Response,
+//             Resources = <<First as Runner>::J as Run>::Resources,
+//         > + Send
+//         + Sync,
+//     <<First as Runner>::S as RequestSender>::Request: Sync,
+//     <<First as Runner>::R as ResponseReceiver>::Response: Send,
+//     <<First as Runner>::J as Run>::Resources: Send,
+//     <First as GetCache>::Error: Send,
+//     <First::S as RequestSender>::Request: Clone + Send,
+//     First::E: From<<Second::S as MpSender>::SenderError>
+//         + From<<Second::R as McReceiver>::ReceiverError>
+//         + From<<Second::R as ResponseReceiver>::JobError>,
+//     Second: Runner<E = First::E>
+//         + GetCache<
+//             Request = <<Second as Runner>::S as RequestSender>::Request,
+//             Response = <<Second as Runner>::R as ResponseReceiver>::Response,
+//             Resources = <<Second as Runner>::J as Run>::Resources,
+//         > + Send
+//         + Sync,
+//     <<Second as Runner>::S as RequestSender>::Request: Send + Sync,
+//     <<Second as Runner>::R as ResponseReceiver>::Response: Send,
+//     <<Second as Runner>::J as Run>::Resources: Send,
+//     <Second as GetCache>::Error: Send,
+//     F: Fn(First::NewCtx) -> <Second::J as Run>::Request + Send + Sync,
+// {
+//     type Request = <<First as Runner>::S as RequestSender>::Request;
 
-    type Response = <<Second as Runner>::R as ResponseReceiver>::Response;
+//     type Response = <<Second as Runner>::R as ResponseReceiver>::Response;
 
-    type Resources = (
-        <<First as Runner>::J as Run>::Resources,
-        <<Second as Runner>::J as Run>::Resources,
-    );
+//     type Resources = (
+//         <<First as Runner>::J as Run>::Resources,
+//         <<Second as Runner>::J as Run>::Resources,
+//     );
 
-    type Error = Either<<First as GetCache>::Error, <Second as GetCache>::Error>;
+//     type Error = Either<<First as GetCache>::Error, <Second as GetCache>::Error>;
 
-    async fn get_cached(
-        &self,
-        req: &Self::Request,
-        rsrcs: &mut Self::Resources,
-    ) -> Result<Option<Self::Response>, Self::Error> {
-        let (rsrcs1, rsrcs2) = rsrcs;
-        let rslt1 = self
-            .first
-            .get_cached(req, rsrcs1)
-            .await
-            .map_err(either::Left)?;
+//     async fn get_cached(
+//         &self,
+//         req: &Self::Request,
+//         rsrcs: &mut Self::Resources,
+//     ) -> Result<Option<Self::Response>, Self::Error> {
+//         let (rsrcs1, rsrcs2) = rsrcs;
+//         let rslt1 = self
+//             .first
+//             .get_cached(req, rsrcs1)
+//             .await
+//             .map_err(either::Left)?;
 
-        if let Some(rsp1) = rslt1 {
-            let req2 = (self.f)(req.clone(), rsp1);
-            let cache2 = self
-                .then
-                .get_cached(&req2, rsrcs2)
-                .await
-                .map_err(either::Right)?;
-            return Ok(cache2);
-        }
-        Ok(None)
-    }
-}
+//         if let Some(rsp1) = rslt1 {
+//             let req2 = (self.f)(req.clone(), rsp1);
+//             let cache2 = self
+//                 .then
+//                 .get_cached(&req2, rsrcs2)
+//                 .await
+//                 .map_err(either::Right)?;
+//             return Ok(cache2);
+//         }
+//         Ok(None)
+//     }
+// }
