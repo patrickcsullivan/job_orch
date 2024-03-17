@@ -1,9 +1,11 @@
 mod cache;
+mod channel;
 mod job;
 mod processor;
-mod runner;
+mod send_receive;
 
 pub use cache::GetCache;
+pub use channel::{McReceiver, MpSender};
 pub use job::Run;
-pub use processor::{McReceiver, MpSender, Processor};
-pub use runner::{runner, Runner};
+pub use processor::Processor;
+pub use send_receive::{SendReceive, SendReceiveError};

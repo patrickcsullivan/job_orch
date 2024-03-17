@@ -10,7 +10,6 @@ The `job_orch` library provides mechanisms for orchestrating jobs in an asynchro
 - **Processor**: An asynchronous process or thread which recieves job requests, executes jobs, and publishes job responses.
 - **Request Sender**: The sending side of a channel that is used by other threads or processes to send job requests to a processor.
 - **Response Receiver**: The receiving side of a channel that is used by other threads or processes to await job responses from a processor.
-- **Runner**: A structure which wraps the request sender and response receiver of a processor for a particular type of job. This structure has an asynchronous [run] function that accepts a request and returns a response; when called the function will place the given request on the request sender and will wait for a response from the processor on the response receiver. Runners for individual jobs can be composed together into chains of runners, where the response from a runner that is earlier in the chain will be mapped to a request to the subsequent runner in the chain.
 
 ## Job
 
@@ -22,9 +21,9 @@ The definition of a job is intendened should be independent of where and how the
 
 Although the definition of a job using the [Run] trait is intended to be independent of where and how a job is executed, the purpose of this library is to provide useful abstractions around running jobs asynchronously and in an event-driven manner.
 
-In general, we expect that users of this library will want to run jobs as separate threads or processes which listen for requests and then asynchronously emit responses when they are done. The inputs and outputs of these individual nodes can then be chained together in an even-driven manner.
+In general, we expect that users of this library will want to run jobs as separate threads or processes which listen for requests and then asynchronously emit responses when they are done. The inputs and outputs of these individual jobs can then be chained together in an even-driven manner.
 
-We refer to one of these job processing threads or processes as a job processor. A job processor implements the [Processor] trait, and each [Processor] is associated with a specific job (implementor of [Run]), a channel for sending requests to the processor, and a channel for sending responses from the processor. TODO -> Each [Processor] implements a `run` method, in which the processor should wait on requests sent to the [SendRequest] "sender" and then broadcast responses that can be read from the [ReceiveResponse] "receiver". The [Processor] can also return instances of the related [SendRequest]s and [ReceiveResponse]s so that multiple clients may send requests to and wait on responses from the job processor.
+We refer to one of these job processing threads or processes as a processor. A processor implements the [Processor] trait, and each [Processor] is associated with a specific implementation of the [Run] trait, a channel for sending requests to the processor, and a channel for sending responses from the processor. Each [Processor] implements a `run` method, in which the processor should wait on requests sent to the requests channel and then broadcast responses to the responses channel. The [Processor] can also return instances of the request channel's sender end and the response channel's receiver end so that multiple clients may send requests to and wait on responses from the job processor.
 
 ## Request sender
 
@@ -42,10 +41,6 @@ The [McReceive] trait is an abstraction over "receivers", the receiver sides of 
 - a client which polls an AWS SQS queue for responses
 - a mock which logs calls to receive responses for inspection in unit tests
 
-## Runner
-
 ## Caching
 
 A job may implement the [GetCache] trait. This trait provides the [get_cache] method which accepts a request and optionally returns a cached response. By implementing this trait on a job, we can indicate that it may be possible to retrieve a cached response and avoid the expensive work of executing a job's [run] method.
-
-If a job implements [GetCache], then any [RunnerSingle] which wraps that individual job will also automatically implement [GetCache]. Any composition of a chain of runners will also automatically implement [GetCache] if all runners in the chain implement [GetCache]. In this implementation [get_cache] will be called for each individual runner in the chain in order, and if all runners return a cached response then the method will return the final response. If the [get_cache] method of any runner in the chain returns `None`, then the [get_cache] method for the chain of runners will return `None`.

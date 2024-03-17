@@ -1,56 +1,5 @@
-use crate::job::Run;
+use crate::{McReceiver, MpSender, Run};
 use async_trait::async_trait;
-
-/// The sending side of a multiple-producer channel.
-#[async_trait]
-pub trait MpSender: Clone {
-    type Message;
-    type SenderError;
-
-    async fn send(&self, msg: Self::Message) -> Result<(), Self::SenderError>;
-}
-
-/// The receiving side of a multiple-consumer channel.
-#[async_trait]
-pub trait McReceiver: Clone {
-    type Message;
-    type ReceiverError;
-
-    async fn receive(&self) -> Result<Self::Message, Self::ReceiverError>;
-}
-
-// /// The sending side of a multiple-producer channel for a job processor.
-// #[async_trait]
-// pub trait RequestSender: MpSender<Message = (Self::JobId, Self::Request)> {
-//     type JobId: Send;
-//     type Request: Send;
-
-//     /// Sends a request to perform a job to the processor.
-//     async fn send_request(
-//         &self,
-//         job_id: Self::JobId,
-//         request: Self::Request,
-//     ) -> Result<(), Self::SenderError> {
-//         self.send((job_id, request)).await
-//     }
-// }
-
-// /// The receiving side of a multiple-consumer channel for a job processor.
-// #[async_trait]
-// pub trait ResponseReceiver:
-//     McReceiver<Message = (Self::JobId, Result<Self::Response, Self::JobError>)>
-// {
-//     type JobId;
-//     type Response;
-//     type JobError;
-
-//     /// Wait to receive a job response from the processor.
-//     async fn receive_response(
-//         &self,
-//     ) -> Result<(Self::JobId, Result<Self::Response, Self::JobError>), Self::ReceiverError> {
-//         self.receive().await
-//     }
-// }
 
 /// A processor that receives asynchronous job requests, executes the jobs, and
 /// then emits the job responses.  
@@ -60,10 +9,20 @@ where
     J: Run,
     JId: Clone + Eq,
 {
+    /// The type of the sender end of the channel for job requests.
     type RequestSender: MpSender<Message = (JId, J::Request)>;
+
+    /// The type of the receiver end of the channel for job requests.
     type RequestReceiver: McReceiver<Message = (JId, J::Request)>;
+
+    /// The type of the sender end of the channel for job responses.
     type ResponseSender: MpSender<Message = (JId, Result<J::Response, J::Error>)>;
+
+    /// The type of the receiver end of the channel for job responses.
     type ResponseReceiver: McReceiver<Message = (JId, Result<J::Response, J::Error>)>;
+
+    /// The type of error that can occur when processing asynchronous job
+    /// requests.
     type Error;
 
     /// Returns a sender for sending job requests to the processor.

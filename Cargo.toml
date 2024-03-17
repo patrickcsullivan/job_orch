@@ -11,4 +11,5 @@ license-file = "LICENSE.txt"
 [dependencies]
 async-trait = "0.1.77"
 either = "1.10.0"
+thiserror = "1.0.58"
 tokio = { version = "1.36.0", features = ["full"] }
