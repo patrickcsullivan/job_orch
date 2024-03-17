@@ -10,7 +10,6 @@ pub trait GetCache {
 
     /// Try to get a cached version of the response.
     async fn get_cached(
-        &self,
         req: &Self::Request,
         rsrcs: &mut Self::Resources,
     ) -> Result<Option<Self::Response>, Self::Error>;

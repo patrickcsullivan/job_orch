@@ -14,7 +14,7 @@ pub fn runner<JId, JErr, Req, Resp, ReqTx, RespRx, E>(
     timeout: Duration,
 ) -> Runner<JId, JErr, Req, Resp, ReqTx, RespRx, E>
 where
-    JId: Copy + Eq + for<'a> From<&'a Req>,
+    JId: Copy + Eq,
     ReqTx: MpSender<Message = (JId, Req)>,
     RespRx: McReceiver<Message = (JId, Result<Resp, JErr>)>,
     E: From<JErr> + From<ReqTx::SenderError> + From<RespRx::ReceiverError>,
@@ -34,7 +34,7 @@ where
 /// for a corresponding response from the [response_receiver].
 pub struct Runner<JId, JErr, Req, Resp, ReqTx, RespRx, E>
 where
-    JId: Copy + Eq + for<'a> From<&'a Req>,
+    JId: Copy + Eq,
     ReqTx: MpSender<Message = (JId, Req)>,
     RespRx: McReceiver<Message = (JId, Result<Resp, JErr>)>,
     E: From<JErr> + From<ReqTx::SenderError> + From<RespRx::ReceiverError>,
@@ -58,20 +58,23 @@ where
 
 impl<JId, JErr, Req, Resp, ReqTx, RespRx, E> Runner<JId, JErr, Req, Resp, ReqTx, RespRx, E>
 where
-    JId: Copy + Eq + Send + for<'a> From<&'a Req> + 'static,
+    JId: Copy + Eq + Send + Sync + 'static,
     JErr: Send + 'static,
+    Req: Send + 'static,
     Resp: Send + 'static,
-    ReqTx: MpSender<Message = (JId, Req)> + 'static,
-    RespRx: McReceiver<Message = (JId, Result<Resp, JErr>)> + Send + 'static,
+    ReqTx: MpSender<Message = (JId, Req)> + Send + Sync + 'static,
+    RespRx: McReceiver<Message = (JId, Result<Resp, JErr>)> + Send + Sync + 'static,
     E: From<JErr>
         + From<ReqTx::SenderError>
         + From<RespRx::ReceiverError>
         + From<JoinError>
         + From<Elapsed>
-        + Send,
+        + Send
+        + Sync,
 {
-    async fn run(&self, req: Req) -> Result<Resp, E> {
-        let req_job_id: JId = (&req).into();
+    /// Sends a request with the given job ID to the job processor and wait for
+    /// a response from the job processor.
+    pub async fn run(&self, jid: JId, req: Req) -> Result<Resp, E> {
         let receiver = self.response_receiver.clone();
 
         // Start listenting for responses before the request is actually sent so
@@ -79,13 +82,13 @@ where
         let poller = task::spawn(async move {
             loop {
                 match receiver.receive().await {
-                    Ok((resp_job_id, resp_rslt)) if req_job_id == resp_job_id => return resp_rslt,
+                    Ok((resp_job_id, resp_rslt)) if jid == resp_job_id => return resp_rslt,
                     _ => {}
                 }
             }
         });
 
-        self.request_sender.send((req_job_id, req)).await?;
+        self.request_sender.send((jid, req)).await?;
         let resp = time::timeout(self.timeout, poller).await???;
         Ok(resp)
     }
