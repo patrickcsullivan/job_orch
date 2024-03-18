@@ -58,14 +58,14 @@ pub enum SendReceiveError<JErr>
 where
     JErr: Clone,
 {
-    #[error("")]
+    #[error("error occured sending a request to the job processor")]
     RequestSender,
-    #[error("")]
+    #[error("error occured receiving a response from the job processor")]
     ResponseReceiver,
-    #[error("")]
+    #[error(transparent)]
     Job(JErr),
-    #[error("")]
+    #[error("error occured joining on threads")]
     Join,
-    #[error("")]
+    #[error("response was not received by within the expected timeout period")]
     Elapsed,
 }
