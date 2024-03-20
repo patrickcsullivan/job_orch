@@ -10,6 +10,7 @@ pub trait MpSender: Clone {
     /// channel.
     type Error;
 
+    /// Attempts to send a message on the channel.
     async fn send(&self, msg: Self::Message) -> Result<(), Self::Error>;
 }
 
@@ -23,5 +24,6 @@ pub trait McReceiver: Clone {
     /// channel.
     type Error;
 
+    /// Attempts to wait for a message on the channel.
     async fn receive(&self) -> Result<Self::Message, Self::Error>;
 }
