@@ -1,11 +1,9 @@
 [package]
-name = "job_orch"
+name = "job_abstrs"
 version = "0.1.0"
 edition = "2021"
-description = "Library for orchestrating event-driven jobs."
+description = "Abstractions for event-driven jobs."
 license = "MIT"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1.77"

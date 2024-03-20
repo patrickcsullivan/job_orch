@@ -1,6 +1,6 @@
 # Summary
 
-The `job_orch` library provides mechanisms for orchestrating jobs in an asynchronous, event-driven manner.
+The `job_orch` library provides abstractions for jobs that can be orchestrated in an asynchronous, event-driven manner.
 
 # Core concepts
 
